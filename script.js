@@ -2,8 +2,7 @@ let parsedParams = {};
 let queryString = '';
 let ESDMode = false;
 let validVersions = [ "Windows 10", "Windows 11" ];
-headers.append('Access-Control-Allow-Origin', 'http://localhost:8000');
-headers.append('Access-Control-Allow-Credentials', 'true');
+
 
 document.addEventListener('DOMContentLoaded', () => {
     // Get the query string from the current URL
