@@ -2,8 +2,6 @@ let parsedParams = {};
 let queryString = '';
 let ESDMode = false;
 let validVersions = [ "Windows 10", "Windows 11" ];
-headers.append('Access-Control-Allow-Origin', 'http://localhost:8000');
-headers.append('Access-Control-Allow-Credentials', 'true');
 
 document.addEventListener('DOMContentLoaded', () => {
     // Get the query string from the current URL
@@ -37,7 +35,7 @@ function Debug() {
             <pre>${JSON.stringify(parsedParams, null, 2)}</pre>
         `;
     } else {
-        window.location.href = "http://stackoverflow.com";
+        window.location.href = "google.com";
     }
 }
 
