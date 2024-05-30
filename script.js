@@ -3,6 +3,7 @@ let queryString = '';
 let ESDMode = false;
 let validVersions = [ "Windows 10", "Windows 11" ];
 
+
 document.addEventListener('DOMContentLoaded', () => {
     // Get the query string from the current URL
     queryString = window.location.search.substring(1); // Remove the leading '?'
