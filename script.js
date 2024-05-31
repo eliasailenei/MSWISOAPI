@@ -308,7 +308,8 @@ async function getMSLink(url) {
         } else {
             return "fail";
         }
-    } catch {
+    } catch (error) {
+        console.log(error);
         return "fail";
     }
 }
