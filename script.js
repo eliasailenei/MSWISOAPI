@@ -80,7 +80,7 @@ async function Main() {
                                 let downURL = await getMSLink(downloadURL);
                                 if (downURL == "fail") {
                                     resultDiv.innerHTML = `
-    <pre style="white-space: pre-wrap; font-family: monospace;">${JSON.stringify({"error":"No download links from MS at this time..."}, null, 2)}</pre>
+    <pre style="white-space: pre-wrap; font-family: monospace;">${JSON.stringify({"error":"No download links from MS at this time... If you are using GitHub, there is a high chance it has already loaded. Press the F12 to see the link. This is due to HTTP/HTTPS conflicts."}, null, 2)}</pre>
 `;
                                 } else {
                                     if (DND) {
