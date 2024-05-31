@@ -1,19 +1,18 @@
 let parsedParams = {};
+var releases = [];
+var languages = [];
+var avaliableLinks = [];
 let queryString = '';
 let ESDMode = false;
+let DND = false;
 let validVersions = [ "Windows 10", "Windows 11" ];
-
+let regex;
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Get the query string from the current URL
-    queryString = window.location.search.substring(1); // Remove the leading '?'
-
-    // Parse the query string and display the data
-    //Debug();
+    queryString = window.location.search.substring(1);
     Main();
 });
 
-// Function to parse the query string
 function parseQueryString(query) {
     const params = query.split('+--').map(param => param.split('='));
     const result = {};
@@ -25,125 +24,291 @@ function parseQueryString(query) {
     return result;
 }
 
-function Debug() {
-    // Parse the query string
-    parsedParams = parseQueryString(queryString);
-
-    // Display the parsed parameters as JSON on the webpage
-    const resultDiv = document.getElementById('result');
-    if (Object.keys(parsedParams).length > 0) {
-        resultDiv.innerHTML = `
-            <pre>${JSON.stringify(parsedParams, null, 2)}</pre>
-        `;
-    } else {
-        window.location.href = "google.com";
-    }
-}
-
-function Main() {
+async function Main() {
     let found = false;
     parsedParams = parseQueryString(queryString);
-    console.log(parsedParams);
     const resultDiv = document.getElementById('result');
     if (Object.keys(parsedParams).length > 0) {
-        if (parsedParams.hasOwnProperty("ESDMode")){
-            if (parsedParams["ESDMode"].toLowerCase() === "true"){
+        if (parsedParams.hasOwnProperty("ESDMode")) {
+            if (parsedParams["ESDMode"].toLowerCase() === "true") {
                 ESDMode = true;
-                console.log("true");
             } else {
-                console.log("false");
-            } 
+            }
         }
-        
-        if (parsedParams.hasOwnProperty("--WinVer")){
-            validVersions.forEach(user =>{
-                if (parsedParams["--WinVer"] == under(user) ) {
+        if (parsedParams.hasOwnProperty("DoNotDownload")) {
+            if (parsedParams["DoNotDownload"].toLowerCase() === "true") {
+                DND = true;
+            } else {
+            }
+        }
+
+        if (parsedParams.hasOwnProperty("--WinVer")) {
+            validVersions.forEach(user => {
+                if (parsedParams["--WinVer"] == under(user)) {
                     found = true;
+                    regex = new RegExp("^(.*\\b" + user + "\\b.*)$");
                     return; // Exit the loop
                 }
             });
-            
-            if (found == true){
-                if (parsedParams.hasOwnProperty("Release")){
-                    resultDiv.innerHTML = `
-                    <pre>${JSON.stringify({"error":"OK"})}</pre>
-                `;
+
+            if (found == true) {
+                if (parsedParams.hasOwnProperty("Release")) {
+                    await retrieveRelease(ESDMode);
+                    if (parsedParams["Release"] == "latest") {
+                        let lastRelease = releases[releases.length - 1];
+                        releaseURL = lastRelease[1];
+                    } else {
+                        let selRelease = revunder(parsedParams["Release"]);
+                        let index = binSearch(releases, selRelease);
+                        if (index !== -1) {
+                            let releaseURL = await getURL(releases, selRelease);
+                        }
+                    }
+                    if (parsedParams.hasOwnProperty("Language")) {
+                        languages = await retrieveLanguages(releaseURL);
+                        let indexs = binSearch(languages, parsedParams["Language"]);
+                        if (indexs !== -1) {
+                            let langURL = await getURL(languages, parsedParams["Language"]);
+                            let downloadURL = await retrieveURLs(langURL);
+                            if (downloadURL.length === 0) {
+                                let outputString = JSON.stringify({ "error": "No URLs found!" }, null, 2);
+
+                                resultDiv.innerHTML = `
+                                    <pre>${outputString}</pre>
+                                `;
+                            } else {
+                                let downURL = await getMSLink(downloadURL);
+                                if (downURL == "fail") {
+                                    resultDiv.innerHTML = `
+    <pre style="white-space: pre-wrap; font-family: monospace;">${JSON.stringify({"error":"No download links from MS at this time..."}, null, 2)}</pre>
+`;
+                                } else {
+                                    if (DND) {
+                                        resultDiv.innerHTML = `
+                                            <pre style="white-space: pre-wrap; font-family: monospace;">${JSON.stringify({"url": downURL}, null, 2)}</pre>
+                                        `;
+                                    } else {
+                                        window.location.href = downURL;
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        languages = await retrieveLanguages(releaseURL);
+                        let outputString = JSON.stringify(languages, null, 2);
+
+                        resultDiv.innerHTML = `
+                            <pre>${outputString}</pre>
+                        `;
+                    }
                 } else {
-                   createTable(ESDMode)
+                    await retrieveRelease(ESDMode);
+                    let outputString = JSON.stringify(releases, null, 2);
+
+                    resultDiv.innerHTML = `
+                        <pre>${outputString}</pre>
+                    `;
                 }
-            } else{
+            } else {
                 resultDiv.innerHTML = `
-            <pre>${JSON.stringify({"error":"Invalid input! Check the API documentation to solve this. ErrorCode: INVALIDWINVER"})}</pre>
-        `;
+    <pre style="white-space: pre-wrap; font-family: monospace;">${JSON.stringify({"error":"Invalid input! Check the API documentation to solve this. ErrorCode: INVALIDWINVER"}, null, 2)}</pre>
+`;
             }
         } else {
             resultDiv.innerHTML = `
-            <pre>${JSON.stringify({"error":"Invalid input! Check the API documentation to solve this. ErrorCode: MISSINGWINVER"})}</pre>
-        `;
+    <pre style="white-space: pre-wrap; font-family: monospace;">${JSON.stringify({"error":"Invalid input! Check the API documentation to solve this. ErrorCode: MISSINGWINVER"}, null, 2)}</pre>
+`;
         }
-    } else {
-        window.location.href = "http://stackoverflow.com";
     }
-
 }
+
 function under(str) {
     return str.replace(/ /g, '_');
-  }
-// Function to create a DataTable (similar to C#) using Fetch API
-async function createTable(esd) {
-    let searchFor = esd ? "Operating Systems - (ESD)" : "Operating Systems";
-    let tupleList = [];
+}
 
+function revunder(str) {
+    return str.replace(/_/g, ' ');
+}
+
+async function retrieveRelease(esd) {
+    let searchFor = esd ? "Operating Systems - (ESD)" : "Operating Systems";
     try {
-        // Fetch the HTML content of the website
         const response = await fetch("https://files.rg-adguard.net/category");
 
         if (!response.ok) {
             throw new Error("Failed to fetch HTML content");
         }
 
-        // Parse the HTML content
         const html = await response.text();
         const doc = new DOMParser().parseFromString(html, "text/html");
 
-        // Find the link corresponding to the searchFor text
         const link = Array.from(doc.querySelectorAll("a"))
             .find(a => a.textContent.trim() === searchFor)
             ?.getAttribute("href");
 
         if (link) {
-            // Fetch the HTML content of the found link
             const linkResponse = await fetch(link);
 
             if (!linkResponse.ok) {
                 throw new Error("Failed to fetch HTML content from the link");
             }
 
-            // Parse the HTML content of the link
             const linkHtml = await linkResponse.text();
             const linkDoc = new DOMParser().parseFromString(linkHtml, "text/html");
 
-            // Process the HTML to populate the tupleList
-            displayAnchorTags(linkDoc, tupleList);
+            addDataToReleases(linkDoc);
         } else {
-            console.error("Link not found.");
+            resultDiv.innerHTML = `
+    <pre style="white-space: pre-wrap; font-family: monospace;">${JSON.stringify({"error":"Something went wrong, contact me to see the problem. ERRORCODE:NOLINK"}, null, 2)}</pre>
+`;
         }
     } catch (error) {
-        console.error("Error:", error);
+        resultDiv.innerHTML = `
+    <pre style="white-space: pre-wrap; font-family: monospace;">${JSON.stringify({"error":"Something went wrong, " + error}, null, 2)}</pre>
+`;
     }
-
-    return tupleList;
 }
 
-// Function to process HTML and populate tupleList
-function displayAnchorTags(doc, tupleList) {
+function addDataToReleases(doc) {
     Array.from(doc.querySelectorAll("a")).forEach(a => {
-        tupleList.push([a.getAttribute("href")]);
+        if (regex.test(a.innerText)) {
+            var toPass = [a.innerText, a.getAttribute("href")];
+            releases.push(toPass);
+        }
     });
 }
 
-// Example usage
-createTable(true).then(tupleList => {
-    console.log(tupleList);
-});
+function binSearch(arr, targetLanguage) {
+    arr.sort((a, b) => a[0].localeCompare(b[0]));
 
+    let left = 0;
+    let right = arr.length - 1;
+
+    while (left <= right) {
+        let mid = Math.floor((left + right) / 2);
+        if (arr[mid][0] === targetLanguage) {
+            return mid;
+        }
+        if (arr[mid][0] < targetLanguage) {
+            left = mid + 1;
+        } else {
+            right = mid - 1;
+        }
+    }
+    return -1;
+}
+
+function getURL(arr, targetRelease) {
+    for (let i = 0; i < arr.length; i++) {
+        if (arr[i][0] === targetRelease) {
+            return arr[i][1];
+        }
+    }
+    return null;
+}
+
+async function retrieveLanguages(releaseURL) {
+    let list = [];
+    try {
+        const response = await fetch(releaseURL);
+
+        if (!response.ok) {
+            throw new Error("Failed to fetch HTML content");
+        }
+
+        const html = await response.text();
+        const doc = new DOMParser().parseFromString(html, "text/html");
+
+        const anchorTags = Array.from(doc.querySelectorAll("a"));
+
+        for (const anchorTag of anchorTags) {
+            const entryUrl = anchorTag.getAttribute("href");
+            let language = anchorTag.innerHTML;
+
+            language = language.replace(/<.*?>/g, '');
+
+            if (!entryUrl || !language) continue;
+
+            if (!entryUrl.startsWith("https://")) continue;
+
+            if (!/^[a-zA-Z]+$/.test(language)) continue;
+            var toPush = [language, entryUrl];
+            list.push(toPush);
+        }
+
+        if (list.length > 0) {
+            return list;
+        } else {
+            resultDiv.innerHTML = `
+    <pre style="white-space: pre-wrap; font-family: monospace;">${JSON.stringify({"error":"No valid languages found in the links."}, null, 2)}</pre>
+`;
+        }
+
+    } catch (error) {
+        resultDiv.innerHTML = `
+    <pre style="white-space: pre-wrap; font-family: monospace;">${JSON.stringify({"error":"Something went wrong, " + error}, null, 2)}</pre>
+`;
+    }
+}
+
+async function retrieveURLs(url) {
+    let list = [];
+    try {
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error("Failed to fetch HTML content");
+        }
+
+        const html = await response.text();
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        const arm = "A64";
+        const business = "CLIENTBUSINESS";
+        const anchorTags = Array.from(doc.querySelectorAll("a"));
+
+        for (const anchorTag of anchorTags) {
+            const entryUrl = anchorTag.getAttribute("href");
+            let data = anchorTag.innerHTML;
+            if (!data.startsWith("<")) {
+                if (!data.startsWith("@")) {
+                    if (isNum(data)) {
+                        if (!data.includes(arm)) {
+                            if (!data.includes(business)) {
+                                return entryUrl;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } catch (error) {
+    }
+}
+
+function isNum(str) {
+    return /^[0-9]/.test(str);
+}
+
+async function getMSLink(url) {
+    try {
+        const payloadOfficial = new URLSearchParams({
+            'dl_official': 'Test'
+        });
+        let resp;
+        response = await fetch(url, {
+            method: 'POST',
+            body: payloadOfficial,
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        });
+        const responseUrl = response.url;
+        if (responseUrl) {
+            return responseUrl;
+        } else {
+            return "fail";
+        }
+    } catch {
+        return "fail";
+    }
+}
