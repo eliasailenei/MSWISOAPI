@@ -133,7 +133,7 @@ function revunder(str) {
 async function retrieveRelease(esd) {
     let searchFor = esd ? "Operating Systems - (ESD)" : "Operating Systems";
     try {
-        const response = await fetch("https://files.rg-adguard.net/category");
+        const response = await fetch("https://corsproxy.io/?https://files.rg-adguard.net/category");
 
         if (!response.ok) {
             throw new Error("Failed to fetch HTML content");
