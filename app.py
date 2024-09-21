@@ -37,7 +37,6 @@ class WinVerLogic(MethodView):
                     return [{'error': "MISSINGRELEASE"}]
                 else:
                     allRel = asyncio.run(getAllReleases(version, esd))
-                     return allRel
                     modified_release = release.replace("_", " ")
                     matching_release = next((item for item in allRel if modified_release in item['rel']), None)
                     if release == "":
